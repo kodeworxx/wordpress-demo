@@ -1,0 +1,104 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wordpress-app
+  labels:
+    app: wordpress-app
+spec:
+  containers:
+  - image: wordpress:latest
+    name: wordpress
+    volumeMounts:
+      - mountPath: /var/www/html
+        name: wp-volume-app
+        subPath: html
+    env:
+      - name: WORDPRESS_DB_HOST
+        value: "wordpress-db-svc:3306"
+      - name: WORDPRESS_DB_USER
+        value: wordpress
+      - name: WORDPRESS_DB_PASSWORD
+        value: wordpress
+  volumes:
+  - name: wp-volume-app
+    hostPath:
+      path: /tmp/wp-stack
+      type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wordpress-db
+  labels:
+    app: wordpress-db
+spec:
+  containers:
+  - image: mysql:latest
+    name: db
+    volumeMounts:
+      - mountPath: /var/lib/mysql
+        name: wp-volume-db
+        subPath: mysql
+    env:
+      - name: MYSQL_ROOT_PASSWORD
+        value: secure-password
+      - name: MYSQL_DATABASE
+        value: wordpress
+      - name: MYSQL_USER
+        value: wordpress
+      - name: MYSQL_PASSWORD
+        value: wordpress
+  volumes:
+  - name: wp-volume-db
+    hostPath:
+      path: /tmp/wp-stack
+      type: DirectoryOrCreate
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-app-svc
+spec:
+  type: NodePort
+  selector:
+    app: wordpress-app
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 80 
+    nodePort: 30080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress-db-svc
+spec:
+  selector:
+    app: wordpress-db
+  ports:
+  - protocol: TCP
+    port: 3306
+    targetPort: 3306 
+
+---
+apiVersion: networking.k8s.io/v1 
+kind: Ingress
+metadata:
+  name: wordpress-ingress
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: "wordpress.localhost"
+    http:
+     paths:
+     - pathType: Prefix 
+       path: /
+       backend:
+         service:
+           name: wordpress-app-svc
+           port:
+             number: 8080
